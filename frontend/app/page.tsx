@@ -1,168 +1,238 @@
-'use client';
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
+import Link from "next/link";
+import { ArrowRight, ChevronRight, CircleCheck, CircleAlert, Bus, Train, TramFront, MapPin, Radio, Accessibility } from "lucide-react";
 
-import { useEffect, useState, useMemo } from 'react';
-import dynamic from 'next/dynamic';
+// Reusable Stat Component for the Top Hero Stats
+const Stat = ({ value, label, accent }: { value: string | number; label: string; accent?: string }) => (
+  <div className="panel-raised p-6 border border-border/50 hover:border-border transition-colors flex flex-col items-start text-left">
+    <div className={`font-serif-display text-4xl md:text-5xl tabular-nums tracking-tight ${accent ?? "text-foreground"}`}>
+      {value}
+    </div>
+    <div className="label-eyebrow mt-3">{label}</div>
+  </div>
+);
 
-const DynamicMap = dynamic(() => import('../components/Map'), { ssr: false });
+// Data structure for the Research Breakdown Panels
+const breakdown = [
+  { type: 'metro', label: 'Metro', color: '#60A5FA', total: 52, accessible: 52, barrier: 0, pct: 100, icon: Train },
+  { type: 'bus', label: 'Bus Network', color: '#3B82F6', total: 4286, accessible: 3643, barrier: 643, pct: 85, icon: Bus },
+  { type: 'tram', label: 'Tram Lines', color: '#FDE047', total: 612, accessible: 257, barrier: 355, pct: 42, icon: TramFront },
+  { type: 'hev', label: 'Suburban Railway', color: '#22C55E', total: 81, accessible: 12, barrier: 69, pct: 15, icon: Train }
+];
 
-export default function Home() {
-  // Data State
-  const [stops, setStops] = useState(null);
-  const [vehicles, setVehicles] = useState({});
-  const [routeMap, setRouteMap] = useState({});
-  
-  // UI Control State
-  const [showAllVehicles, setShowAllVehicles] = useState(true); // Master Toggle for Vehicles
-  const [showAllStops, setShowAllStops] = useState(false);      // Master Toggle for Stops
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filters, setFilters] = useState({ tram: true, bus: true, metro: true });
-
-  useEffect(() => {
-    fetch('http://localhost:8000/api/v1/stops').then(res => res.json()).then(data => setStops(data));
-    fetch('http://localhost:8000/api/v1/routes').then(res => res.json()).then(data => setRouteMap(data));
-
-    const ws = new WebSocket('ws://localhost:8000/ws/vehicles');
-    ws.onmessage = (event) => {
-      const vehicle = JSON.parse(event.data);
-      setVehicles(prev => ({ ...prev, [vehicle.vehicle_id]: vehicle }));
-    };
-    return () => ws.close();
-  }, []);
-
-  const getTransportCategory = (typeCode) => {
-    if (typeCode === 0) return 'tram';
-    if (typeCode === 1) return 'metro';
-    if (typeCode === 3 || typeCode === 11 || typeCode === 800) return 'bus'; 
-    return 'other';
-  };
-
-  // --- VEHICLE FILTERING ENGINE ---
-  const visibleVehicles = Object.values(vehicles).filter(vehicle => {
-    // 1. If "Show All" is checked, bypass all filters and show everything!
-    if (showAllVehicles) return true;
-
-    const routeInfo = routeMap[vehicle.route_id];
-    if (!routeInfo) return false;
-
-    // 2. Search Bar Filter
-    if (searchQuery && !routeInfo.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-
-    // 3. Checkbox Type Filter
-    const category = getTransportCategory(routeInfo.type);
-    if (category === 'tram' && !filters.tram) return false;
-    if (category === 'bus' && !filters.bus) return false;
-    if (category === 'metro' && !filters.metro) return false;
-
-    return true;
-  });
-
-  // --- STOP FILTERING ENGINE ---
-  // useMemo prevents re-calculating the 6000 stops on every frame unless inputs change
-  const visibleStops = useMemo(() => {
-    if (!stops) return null;
-    
-    // 1. If "Show All" is checked, dump all 6000+ stops to the map
-    if (showAllStops) return stops; 
-
-    // 2. If no search query and "Show All" is false, show a clean map (empty array)
-    if (!searchQuery) return { ...stops, features: [] };
-
-    // 3. Filter stops based on whether their route array contains the searched line
-    const filteredFeatures = stops.features.filter(feature => {
-        const stopRouteIds = feature.properties.route_ids || [];
-        return stopRouteIds.some(r_id => {
-            const rInfo = routeMap[r_id];
-            return rInfo && rInfo.name.toLowerCase().includes(searchQuery.toLowerCase());
-        });
-    });
-
-    return { ...stops, features: filteredFeatures };
-  }, [stops, showAllStops, searchQuery, routeMap]);
-
-
+export default function HomePage() {
   return (
-    <main className="relative flex min-h-screen">
-      <div className="absolute z-[1000] top-4 left-4 w-80 bg-white/95 p-5 rounded-xl shadow-2xl border border-gray-200 backdrop-blur-sm">
-        <h1 className="text-2xl font-black text-gray-900 mb-1">BKK Live Transit</h1>
-        <p className="text-sm text-gray-500 mb-6 pb-4 border-b">Real-time Spatial Dashboard</p>
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      {/* 1. Sticky Navigation Header */}
+      <SiteHeader />
 
-        {/* Master Toggles */}
-        <div className="space-y-3 mb-6 bg-gray-100 p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <label className="font-bold text-sm text-blue-900">SHOW ALL Vehicles</label>
-            <input 
-              type="checkbox" 
-              className="w-5 h-5 text-blue-600 cursor-pointer"
-              checked={showAllVehicles} 
-              onChange={(e) => setShowAllVehicles(e.target.checked)} 
-            />
-          </div>
-          <div className="flex items-center justify-between border-t border-gray-300 pt-3">
-            <label className="font-bold text-sm text-gray-800">SHOW ALL Stops</label>
-            <input 
-              type="checkbox" 
-              className="w-5 h-5 text-blue-600 cursor-pointer"
-              checked={showAllStops} 
-              onChange={(e) => setShowAllStops(e.target.checked)} 
-            />
-          </div>
-        </div>
+      {/* 2. Main Hero Section */}
+      <section className="relative border-b border-border">
+        
+        {/* Background Layers */}
+        <div className="absolute inset-0 grid-bg opacity-70 pointer-events-none" aria-hidden />
+        <div className="absolute inset-0 bg-glow pointer-events-none" aria-hidden />
 
-        {/* Search Bar */}
-        <div className="mb-6">
-          <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Filter Specific Line (e.g., M3, 4)</label>
-          <input 
-            type="text" 
-            placeholder="Type line number..."
-            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              // Pro-Tip: Automatically uncheck "Show All" so the user can immediately see their filtered results
-              if (e.target.value.length > 0) {
-                  setShowAllVehicles(false);
-                  setShowAllStops(false);
-              }
-            }}
-          />
-        </div>
-
-        {/* Type Filters */}
-        <div className="space-y-3 mb-6 pb-6 border-b border-gray-200">
-          <label className="block text-xs font-bold text-gray-700 uppercase mb-2">Transport Type</label>
-          {['tram', 'bus', 'metro'].map(type => (
-            <div key={type} className="flex items-center">
-              <input 
-                type="checkbox" 
-                id={type}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                checked={filters[type]}
-                disabled={showAllVehicles} // Disable checkboxes if "Show All" is overriding them
-                onChange={(e) => setFilters(prev => ({ ...prev, [type]: e.target.checked }))}
-              />
-              <label htmlFor={type} className={`ml-3 text-sm capitalize ${showAllVehicles ? 'text-gray-400' : 'text-gray-700 cursor-pointer'}`}>
-                {type}
-              </label>
+        <div className="container mx-auto px-6 pt-24 pb-24 relative z-10">
+          <div className="max-w-3xl">
+            {/* Status Pill */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/60 px-4 py-1.5 text-xs font-mono uppercase tracking-widest text-muted-foreground mb-8 shadow-sm backdrop-blur-sm">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              System Online · Real-Time Tracking
             </div>
-          ))}
-        </div>
 
-        {/* Analytics Readout */}
-        <div className="text-sm font-semibold text-gray-800 flex justify-between">
-          <span>Vehicles on Map:</span>
-          <span className="text-blue-600 font-bold">{visibleVehicles.length}</span>
+            {/* Main Title */}
+            <h1 className="font-serif-display text-5xl md:text-7xl leading-[0.95] mb-8">
+              Mapping Budapest's transit,
+              <br />
+              <span className="text-muted-foreground">one accessible stop at a time.</span>
+            </h1>
+
+            {/* Subtitle */}
+            <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed mb-10">
+              An open research project analysing wheelchair accessibility across every BKK station — Bus, Tram, Metro and HÉV — combined with realtime vehicle data so riders, advocates and planners can see the network as it actually is.
+            </p>
+
+            {/* Call to Action Buttons */}
+            <div className="flex flex-wrap items-center gap-4">
+              <Link href="/map" className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-bold text-primary-foreground transition-all duration-300 shadow-glow hover:bg-primary/90 hover:-translate-y-0.5">
+                Explore the live map <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link href="#research" className="inline-flex items-center gap-2 rounded-md border border-border bg-surface/60 px-6 py-3 text-sm font-bold hover:bg-surface-2 transition-colors">
+                Read the research <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Top Hero Stats */}
+          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 w-full">
+            <Stat value="6,196" label="Stations analysed" />
+            <Stat value="82%" label="Currently accessible" accent="text-success" />
+            <Stat value="340+" label="Routes covered" />
+            <Stat value="1500+" label="Live vehicles tracked" accent="text-primary" />
+          </div>
         </div>
-      </div>
-      
-      <div className="w-full h-screen">
-        {/* Pass the new visibleStops logic down to the map. No changes needed in Map.js! */}
-        <DynamicMap 
-          stopsGeoJSON={visibleStops} 
-          liveVehicles={visibleVehicles} 
-          routeMap={routeMap} 
-          showStops={true} // Keep true, as visibility is now controlled natively by visibleStops logic
-        />
-      </div>
-    </main>
+      </section>
+
+      {/* 3. Research Breakdown Section */}
+      <section id="research" className="border-b border-border bg-surface/30">
+        <div className="container mx-auto px-6 py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
+            
+            {/* Left Column: Text Context */}
+            <div className="lg:col-span-5 flex flex-col justify-center">
+              <div className="label-eyebrow mb-4 text-primary">01 — Research</div>
+              <h2 className="font-serif-display text-4xl leading-tight mb-6 text-foreground">
+                What the data tells us about accessibility in Budapest.
+              </h2>
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                Budapest's transit network spans more than a century of construction.
+                That history shows in the numbers: brand-new lines like M4 are fully
+                accessible, while heritage stations on M1 and many tram stops still
+                present hard barriers for wheelchair users.
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                We combine BKK's published station metadata with realtime GTFS vehicle
+                feeds to produce a single, rider-focused view of accessibility today.
+              </p>
+            </div>
+
+            {/* Right Column: Grid of Data Panels */}
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {breakdown.map((b) => {
+                const Icon = b.icon;
+                return (
+                  <div key={b.type} className="panel p-6 group hover:border-foreground/30 transition-colors shadow-sm">
+                    
+                    {/* Header Row (Icon, Title, Percentage) */}
+                    <div className="flex items-start justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background shadow-inner">
+                          <Icon className="h-5 w-5" style={{ color: b.color }} />
+                        </div>
+                        <div>
+                          <div className="font-bold text-foreground text-sm">{b.label}</div>
+                          <div className="font-mono text-[11px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                            {b.total.toLocaleString()} stations
+                          </div>
+                        </div>
+                      </div>
+                      <div className="font-serif-display text-3xl tabular-nums tracking-tighter" style={{ color: b.color }}>
+                        {b.pct}%
+                      </div>
+                    </div>
+
+                    {/* Progress Bar Layer */}
+                    <div className="h-1.5 w-full rounded-full bg-background border border-border overflow-hidden mb-5">
+                      <div
+                        className="h-full rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${b.pct}%`, backgroundColor: b.color }}
+                      />
+                    </div>
+
+                    {/* Bottom Status Readout */}
+                    <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+                      <span className="flex items-center gap-2">
+                        <CircleCheck className="h-3.5 w-3.5 text-success" />
+                        <span className="text-foreground">{b.accessible.toLocaleString()}</span> accessible
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <CircleAlert className="h-3.5 w-3.5 text-danger" />
+                        <span className="text-foreground">{b.barrier.toLocaleString()}</span> barrier
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Methodology Section */}
+      <section id="methodology" className="border-b border-border bg-background">
+        <div className="container mx-auto px-6 py-24">
+          <div className="label-eyebrow mb-4 text-primary">02 — Methodology</div>
+          <h2 className="font-serif-display text-4xl leading-tight mb-12 max-w-2xl text-foreground">
+            From open data to rider-focused insight.
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: Radio,
+                step: "Step 01",
+                title: "Ingest GTFS feeds",
+                body: "We pull BKK's static GTFS for stations and routes, plus the GTFS-Realtime feed for live vehicle positions and delays.",
+              },
+              {
+                icon: Accessibility,
+                step: "Step 02",
+                title: "Score accessibility",
+                body: "Each stop is classified using the official wheelchair_boarding flag, cross-referenced with crowd-sourced reports and on-site verification.",
+              },
+              {
+                icon: MapPin,
+                step: "Step 03",
+                title: "Visualise in context",
+                body: "Stations and live vehicles are rendered together so riders can see not just whether a stop is accessible, but whether the next vehicle is too.",
+              },
+            ].map(({ icon: Icon, step, title, body }) => (
+              <div key={title} className="panel p-6 hover:border-primary/40 transition-colors shadow-sm">
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 border border-primary/30 mb-5">
+                  <Icon className="h-5 w-5 text-primary" />
+                </div>
+                <div className="label-eyebrow mb-2 text-muted-foreground">{step}</div>
+                <h3 className="font-serif-display text-2xl mb-3 text-foreground">{title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. CTA / Live Map Section */}
+      <section className="border-b border-border bg-background">
+        <div className="container mx-auto px-6 py-24">
+          <div className="panel p-12 md:p-16 relative overflow-hidden shadow-sm">
+            {/* Inner background grid limited strictly to this card */}
+            <div className="absolute inset-0 grid-bg opacity-40" aria-hidden />
+            
+            {/* Increased to max-w-4xl to give the title room to breathe */}
+            <div className="relative max-w-4xl z-10">
+              <div className="label-eyebrow mb-4 text-primary">03 — Live Map</div>
+              
+              {/* Added sm:whitespace-nowrap to keep it on one row */}
+              <h2 className="font-serif-display text-3xl sm:text-4xl md:text-5xl leading-tight mb-6 text-foreground sm:whitespace-nowrap">
+                See the network breathe in realtime.
+              </h2>
+              
+              {/* Moved max-w-2xl down to the paragraph so it still wraps nicely */}
+              <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
+                Filter by transport type or route, toggle accessibility, and watch live
+                vehicles move across Budapest. Green dots mark accessible stations, red
+                ones mark barriers.
+              </p>
+              
+              <Link
+                href="/map"
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-bold text-primary-foreground transition-all duration-300 shadow-glow hover:bg-primary/90 hover:-translate-y-0.5"
+              >
+                Open the live map
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <SiteFooter />
+        
+    </div>
   );
 }
