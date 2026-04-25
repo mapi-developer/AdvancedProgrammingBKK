@@ -18,13 +18,13 @@ export const SiteHeader = () => {
 
         {/* Center: Navigation Links */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
-          <Link href="#project" className="hover:text-foreground transition-colors">
+          <Link href="/#project" className="hover:text-foreground transition-colors">
             Project
           </Link>
-          <Link href="#research" className="hover:text-foreground transition-colors">
+          <Link href="/#research" className="hover:text-foreground transition-colors">
             Research
           </Link>
-          <Link href="#methodology" className="hover:text-foreground transition-colors">
+          <Link href="/#methodology" className="hover:text-foreground transition-colors">
             Methodology
           </Link>
           <Link href="/map" className="hover:text-foreground transition-colors">
