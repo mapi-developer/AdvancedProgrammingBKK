@@ -1,42 +1,111 @@
+'use client';
+
+import { useEffect, useState, useMemo } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import Link from "next/link";
-import { ArrowRight, ChevronRight, CircleCheck, CircleAlert, Bus, Train, TramFront, MapPin, Radio, Accessibility } from "lucide-react";
+import { 
+  ArrowRight, ChevronRight, CircleCheck, CircleAlert, 
+  Bus, Train, TramFront, MapPin, Radio, Accessibility 
+} from "lucide-react";
 
 // Reusable Stat Component for the Top Hero Stats
-const Stat = ({ value, label, accent }: { value: string | number; label: string; accent?: string }) => (
-  <div className="panel-raised p-6 border border-border/50 hover:border-border transition-colors flex flex-col items-start text-left">
-    <div className={`font-serif-display text-4xl md:text-5xl tabular-nums tracking-tight ${accent ?? "text-foreground"}`}>
-      {value}
-    </div>
+const Stat = ({ value, label, accent, loading }: { value: string | number; label: string; accent?: string; loading?: boolean }) => (
+  <div className="panel-raised p-6 border border-border/50 hover:border-border transition-colors flex flex-col items-start text-left min-h-[120px]">
+    {loading ? (
+      <div className="h-10 w-24 bg-surface-2 animate-pulse rounded mb-2" />
+    ) : (
+      <div className={`font-serif-display text-4xl md:text-5xl tabular-nums tracking-tight ${accent ?? "text-foreground"}`}>
+        {value}
+      </div>
+    )}
     <div className="label-eyebrow mt-3">{label}</div>
   </div>
 );
 
-// Data structure for the Research Breakdown Panels
-const breakdown = [
-  { type: 'metro', label: 'Metro', color: '#60A5FA', total: 52, accessible: 52, barrier: 0, pct: 100, icon: Train },
-  { type: 'bus', label: 'Bus Network', color: '#3B82F6', total: 4286, accessible: 3643, barrier: 643, pct: 85, icon: Bus },
-  { type: 'tram', label: 'Tram Lines', color: '#FDE047', total: 612, accessible: 257, barrier: 355, pct: 42, icon: TramFront },
-  { type: 'hev', label: 'Suburban Railway', color: '#22C55E', total: 81, accessible: 12, barrier: 69, pct: 15, icon: Train }
-];
-
 export default function HomePage() {
+  const [data, setData] = useState<{ stops: any; routes: any } | null>(null);
+  const [liveVehicles, setLiveVehicles] = useState(0);
+
+  useEffect(() => {
+    // 1. Fetch Static Data
+    Promise.all([
+      fetch('http://localhost:8000/api/v1/stops').then(res => res.json()),
+      fetch('http://localhost:8000/api/v1/routes').then(res => res.json())
+    ]).then(([stops, routes]) => {
+      setData({ stops, routes });
+    }).catch(err => console.error("Data fetch error:", err));
+
+    // 2. Connect to WebSocket just to count live vehicles for the hero stat
+    const ws = new WebSocket('ws://localhost:8000/ws/vehicles');
+    let count = 0;
+    const vehicleSet = new Set();
+    ws.onmessage = (event) => {
+      const v = JSON.parse(event.data);
+      vehicleSet.add(v.vehicle_id);
+      setLiveVehicles(vehicleSet.size);
+    };
+    return () => ws.close();
+  }, []);
+
+  // --- LOGIC: DYNAMIC CALCULATIONS ---
+  const stats = useMemo(() => {
+    if (!data) return null;
+    const totalStops = data.stops.features.length;
+    const accessibleStops = data.stops.features.filter((f: any) => f.properties.wheelchair_boarding === 1).length;
+    const totalRoutes = Object.keys(data.routes).length;
+    
+    // Breakdown calculations
+    const getCategory = (type: number) => {
+      if (type === 0) return 'tram';
+      if (type === 1) return 'metro';
+      if (type === 109) return 'hev';
+      return 'bus';
+    };
+
+    const categories = {
+      metro: { label: 'Metro', icon: Train, color: '#60A5FA' },
+      bus: { label: 'Bus Network', icon: Bus, color: '#3B82F6' },
+      tram: { label: 'Tram Lines', icon: TramFront, color: '#FDE047' },
+      hev: { label: 'Suburban Railway', icon: Train, color: '#22C55E' }
+    };
+
+    const breakdown = Object.entries(categories).map(([key, meta]) => {
+      // Find stops belonging to this category
+      const catStops = data.stops.features.filter((f: any) => {
+        const stopRouteIds = f.properties.route_ids || [];
+        return stopRouteIds.some((rid: string) => {
+          const r = data.routes[rid];
+          return r && getCategory(r.type) === key;
+        });
+      });
+
+      const total = catStops.length;
+      const accessible = catStops.filter((s: any) => s.properties.wheelchair_boarding === 1).length;
+      const barrier = total - accessible;
+      const pct = total > 0 ? Math.round((accessible / total) * 100) : 0;
+
+      return { type: key, ...meta, total, accessible, barrier, pct };
+    });
+
+    return {
+      totalStops,
+      accessibilityPct: Math.round((accessibleStops / totalStops) * 100),
+      totalRoutes,
+      breakdown
+    };
+  }, [data]);
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* 1. Sticky Navigation Header */}
       <SiteHeader />
 
-      {/* 2. Main Hero Section */}
-      <section className="relative border-b border-border">
-        
-        {/* Background Layers */}
+      <main className="flex-1 relative overflow-hidden">
         <div className="absolute inset-0 grid-bg opacity-70 pointer-events-none" aria-hidden />
         <div className="absolute inset-0 bg-glow pointer-events-none" aria-hidden />
 
         <div className="container mx-auto px-6 pt-24 pb-24 relative z-10">
           <div className="max-w-3xl">
-            {/* Status Pill */}
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/60 px-4 py-1.5 text-xs font-mono uppercase tracking-widest text-muted-foreground mb-8 shadow-sm backdrop-blur-sm">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
@@ -45,19 +114,16 @@ export default function HomePage() {
               System Online · Real-Time Tracking
             </div>
 
-            {/* Main Title */}
             <h1 className="font-serif-display text-5xl md:text-7xl leading-[0.95] mb-8">
               Mapping Budapest's transit,
               <br />
               <span className="text-muted-foreground">one accessible stop at a time.</span>
             </h1>
 
-            {/* Subtitle */}
             <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed mb-10">
-              An open research project analysing wheelchair accessibility across every BKK station — Bus, Tram, Metro and HÉV — combined with realtime vehicle data so riders, advocates and planners can see the network as it actually is.
+              An open research project analysing wheelchair accessibility across every BKK station — Bus, Tram, Metro and HÉV — combined with realtime vehicle data.
             </p>
 
-            {/* Call to Action Buttons */}
             <div className="flex flex-wrap items-center gap-4">
               <Link href="/map" className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-bold text-primary-foreground transition-all duration-300 shadow-glow hover:bg-primary/90 hover:-translate-y-0.5">
                 Explore the live map <ArrowRight className="h-4 w-4" />
@@ -68,47 +134,39 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Top Hero Stats */}
+          {/* Top Hero Stats - NOW DYNAMIC */}
           <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 w-full">
-            <Stat value="6,196" label="Stations analysed" />
-            <Stat value="82%" label="Currently accessible" accent="text-success" />
-            <Stat value="340+" label="Routes covered" />
-            <Stat value="1500+" label="Live vehicles tracked" accent="text-primary" />
+            <Stat value={stats?.totalStops.toLocaleString() || "6,000+"} label="Stations analysed" loading={!stats} />
+            <Stat value={`${stats?.accessibilityPct || 70}%`} label="Currently accessible" accent="text-success" loading={!stats} />
+            <Stat value={stats?.totalRoutes.toLocaleString() || "340+"} label="Routes covered" loading={!stats} />
+            <Stat value={liveVehicles > 0 ? liveVehicles.toLocaleString() : "1,500+"} label="Vehicles tracked" accent="text-primary" />
           </div>
         </div>
-      </section>
+      </main>
 
-      {/* 3. Research Breakdown Section */}
+      {/* 3. Research Breakdown Section - NOW DYNAMIC */}
       <section id="research" className="border-b border-border bg-surface/30">
         <div className="container mx-auto px-6 py-24">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
             
-            {/* Left Column: Text Context */}
             <div className="lg:col-span-5 flex flex-col justify-center">
               <div className="label-eyebrow mb-4 text-primary">01 — Research</div>
               <h2 className="font-serif-display text-4xl leading-tight mb-6 text-foreground">
                 What the data tells us about accessibility in Budapest.
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Budapest's transit network spans more than a century of construction.
-                That history shows in the numbers: brand-new lines like M4 are fully
-                accessible, while heritage stations on M1 and many tram stops still
-                present hard barriers for wheelchair users.
+                Budapest's transit network spans more than a century. Newer lines like M4 are fully accessible, while heritage lines like M1 still present hard barriers.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                We combine BKK's published station metadata with realtime GTFS vehicle
-                feeds to produce a single, rider-focused view of accessibility today.
+                We combine GTFS metadata with realtime feeds to produce a rider-focused view of accessibility today.
               </p>
             </div>
 
-            {/* Right Column: Grid of Data Panels */}
             <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {breakdown.map((b) => {
+              {(stats?.breakdown || []).map((b) => {
                 const Icon = b.icon;
                 return (
                   <div key={b.type} className="panel p-6 group hover:border-foreground/30 transition-colors shadow-sm">
-                    
-                    {/* Header Row (Icon, Title, Percentage) */}
                     <div className="flex items-start justify-between mb-6">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background shadow-inner">
@@ -126,7 +184,6 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    {/* Progress Bar Layer */}
                     <div className="h-1.5 w-full rounded-full bg-background border border-border overflow-hidden mb-5">
                       <div
                         className="h-full rounded-full transition-all duration-1000 ease-out"
@@ -134,7 +191,6 @@ export default function HomePage() {
                       />
                     </div>
 
-                    {/* Bottom Status Readout */}
                     <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
                       <span className="flex items-center gap-2">
                         <CircleCheck className="h-3.5 w-3.5 text-success" />
@@ -148,6 +204,7 @@ export default function HomePage() {
                   </div>
                 );
               })}
+              {!stats && [1,2,3,4].map(i => <div key={i} className="panel h-[180px] animate-pulse bg-surface/50" />)}
             </div>
 
           </div>

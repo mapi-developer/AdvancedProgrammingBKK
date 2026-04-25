@@ -15,10 +15,13 @@ export default function MapPage() {
   const [routeMap, setRouteMap] = useState<any>({});
   const [vehicles, setVehicles] = useState<Record<string, any>>({});
   
+  // UI State
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(['tram', 'bus', 'metro', 'hev']));
   const [selectedRoutes, setSelectedRoutes] = useState<any[]>([]); 
   const [showAccessible, setShowAccessible] = useState(true);
   const [showInaccessible, setShowInaccessible] = useState(true);
+  // NEW: Display Mode State
+  const [displayMode, setDisplayMode] = useState<'all' | 'transport' | 'stops'>('all');
 
   useEffect(() => {
     fetch('http://localhost:8000/api/v1/stops').then(res => res.json()).then(setStops).catch(console.error);
@@ -40,35 +43,35 @@ export default function MapPage() {
     return 'other';
   };
 
+  const isRouteVisible = (routeId: string) => {
+    const route = routeMap[routeId];
+    if (!route) return false;
+    const category = getTransportCategory(route.type);
+    if (!activeTypes.has(category)) return false;
+    if (selectedRoutes.length > 0) {
+      return selectedRoutes.some(sr => sr.id === routeId);
+    }
+    return true;
+  };
+
   const filteredVehicles = useMemo(() => {
-    return Object.values(vehicles).filter((v: any) => {
-      const route = routeMap[v.route_id];
-      if (!route) return false;
-      const category = getTransportCategory(route.type);
-      return activeTypes.has(category) || selectedRoutes.some(sr => sr.id === v.route_id);
-    });
-  }, [vehicles, routeMap, activeTypes, selectedRoutes]);
+    // Logic: Hide all vehicles if mode is 'stops'
+    if (displayMode === 'stops') return [];
+    return Object.values(vehicles).filter((v: any) => isRouteVisible(v.route_id));
+  }, [vehicles, routeMap, activeTypes, selectedRoutes, displayMode]);
 
   const filteredStops = useMemo(() => {
-    if (!stops) return null;
+    // Logic: Hide all stops if mode is 'transport'
+    if (!stops || displayMode === 'transport') return null;
     const features = stops.features.filter((f: any) => {
       const isAcc = f.properties.wheelchair_boarding === 1;
       if (isAcc && !showAccessible) return false;
       if (!isAcc && !showInaccessible) return false;
-
       const stopRouteIds = f.properties.route_ids || [];
-      const hasActiveMode = stopRouteIds.some((rid: string) => {
-        const r = routeMap[rid];
-        return r && activeTypes.has(getTransportCategory(r.type));
-      });
-      const hasPooledRoute = stopRouteIds.some((rid: string) => 
-        selectedRoutes.some(sr => sr.id === rid)
-      );
-
-      return hasActiveMode || hasPooledRoute;
+      return stopRouteIds.some((rid: string) => isRouteVisible(rid));
     });
     return { ...stops, features };
-  }, [stops, routeMap, activeTypes, selectedRoutes, showAccessible, showInaccessible]);
+  }, [stops, routeMap, activeTypes, selectedRoutes, showAccessible, showInaccessible, displayMode]);
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden font-sans">
@@ -79,6 +82,8 @@ export default function MapPage() {
           selectedRoutes={selectedRoutes} setSelectedRoutes={setSelectedRoutes}
           showAccessible={showAccessible} setShowAccessible={setShowAccessible}
           showInaccessible={showInaccessible} setShowInaccessible={setShowInaccessible}
+          // NEW Props
+          displayMode={displayMode} setDisplayMode={setDisplayMode}
           visibleVehicleCount={filteredVehicles.length}
           visibleStationCount={filteredStops?.features.length || 0}
           routeMap={routeMap} getCategory={getTransportCategory}
@@ -87,9 +92,10 @@ export default function MapPage() {
             setSelectedRoutes([]);
             setShowAccessible(true);
             setShowInaccessible(true);
+            setDisplayMode('all');
           }}
         />
-        <main className="flex-1 relative z-0">
+        <main className="flex-1 h-full relative z-0">
           <DynamicMap stops={filteredStops} vehicles={filteredVehicles} routeMap={routeMap} />
         </main>
       </div>

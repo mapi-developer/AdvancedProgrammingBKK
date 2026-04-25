@@ -72,7 +72,7 @@ def stream_vehicle_positions(producer):
 
         # BKK updates data every 10+ seconds. 
         # A 10-second sleep respects their rate limit recommendations.
-        time.sleep(60)
+        time.sleep(15)
 
 if __name__ == "__main__":
     if not API_KEY:
