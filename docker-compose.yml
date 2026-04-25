@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: adv_prog_spatial_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: bkk_transit
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d bkk_transit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: adv_prog_kafka
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+    ports:
+      - "9094:9092"
+
+  ingestion-worker:
+    build: ./worker 
+    container_name: adv_prog_ingestion
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_URL=postgresql://user:password@postgres:5432/bkk_transit
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    volumes:
+      - ./worker:/app 
+    command: >
+      bash -c "python -u main.py && python -u realtime_worker.py"
+
+  api-service:
+    build: ./api
+    container_name: adv_prog_api
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_URL=postgresql://user:password@postgres:5432/bkk_transit
+      - KAFKA_BROKER=kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    volumes:
+      # Mounts local api folder for hot-reloading during development
+      - ./api:/app
+    # Uvicorn is the ASGI server that runs FastAPI with WebSockets
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  pgdata:
