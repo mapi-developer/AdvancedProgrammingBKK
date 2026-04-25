@@ -15,9 +15,8 @@ export default function MapPage() {
   const [routeMap, setRouteMap] = useState<any>({});
   const [vehicles, setVehicles] = useState<Record<string, any>>({});
   
-  // UI State
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(['tram', 'bus', 'metro', 'hev']));
-  const [selectedRoutes, setSelectedRoutes] = useState<any[]>([]); // New Route Pool State
+  const [selectedRoutes, setSelectedRoutes] = useState<any[]>([]); 
   const [showAccessible, setShowAccessible] = useState(true);
   const [showInaccessible, setShowInaccessible] = useState(true);
 
@@ -41,30 +40,22 @@ export default function MapPage() {
     return 'other';
   };
 
-  // --- FILTERING ENGINE ---
   const filteredVehicles = useMemo(() => {
     return Object.values(vehicles).filter((v: any) => {
       const route = routeMap[v.route_id];
       if (!route) return false;
-      
       const category = getTransportCategory(route.type);
-      const isTypeActive = activeTypes.has(category);
-      const isRouteInPool = selectedRoutes.some(sr => sr.id === v.route_id);
-
-      // Show if category is ON OR if specific line is in pool
-      return isTypeActive || isRouteInPool;
+      return activeTypes.has(category) || selectedRoutes.some(sr => sr.id === v.route_id);
     });
   }, [vehicles, routeMap, activeTypes, selectedRoutes]);
 
   const filteredStops = useMemo(() => {
     if (!stops) return null;
     const features = stops.features.filter((f: any) => {
-      // 1. Master Accessibility Check
       const isAcc = f.properties.wheelchair_boarding === 1;
       if (isAcc && !showAccessible) return false;
       if (!isAcc && !showInaccessible) return false;
 
-      // 2. Data check: Is this stop served by an active mode or a pooled route?
       const stopRouteIds = f.properties.route_ids || [];
       const hasActiveMode = stopRouteIds.some((rid: string) => {
         const r = routeMap[rid];
@@ -84,18 +75,19 @@ export default function MapPage() {
       <SiteHeader />
       <div className="flex-1 flex flex-row overflow-hidden">
         <FilterPanel 
-          activeTypes={activeTypes}
-          setActiveTypes={setActiveTypes}
-          selectedRoutes={selectedRoutes}
-          setSelectedRoutes={setSelectedRoutes}
-          showAccessible={showAccessible}
-          setShowAccessible={setShowAccessible}
-          showInaccessible={showInaccessible}
-          setShowInaccessible={setShowInaccessible}
+          activeTypes={activeTypes} setActiveTypes={setActiveTypes}
+          selectedRoutes={selectedRoutes} setSelectedRoutes={setSelectedRoutes}
+          showAccessible={showAccessible} setShowAccessible={setShowAccessible}
+          showInaccessible={showInaccessible} setShowInaccessible={setShowInaccessible}
           visibleVehicleCount={filteredVehicles.length}
           visibleStationCount={filteredStops?.features.length || 0}
-          routeMap={routeMap}
-          getCategory={getTransportCategory}
+          routeMap={routeMap} getCategory={getTransportCategory}
+          resetFilters={() => {
+            setActiveTypes(new Set(['tram', 'bus', 'metro', 'hev']));
+            setSelectedRoutes([]);
+            setShowAccessible(true);
+            setShowInaccessible(true);
+          }}
         />
         <main className="flex-1 relative z-0">
           <DynamicMap stops={filteredStops} vehicles={filteredVehicles} routeMap={routeMap} />
