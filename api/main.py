@@ -27,48 +27,44 @@ engine = create_engine(DB_URL)
 # ---------------------------------------------------------
 @app.get("/api/v1/stops")
 def get_stops():
-    """
-    Fetches all transit stops and returns them as a GeoJSON FeatureCollection.
-    This is optimized for direct ingestion by Mapbox/Leaflet frontends.
-    """
+    """Fetches stops and includes an array of route_ids that service each stop."""
     try:
         with engine.connect() as conn:
-            # ST_AsGeoJSON is a PostGIS function that translates binary geometry to JSON
+            # Join stops with our new route_stops table
             query = text("""
                 SELECT 
-                    stop_id, 
-                    stop_name, 
-                    wheelchair_boarding, 
-                    ST_AsGeoJSON(geometry) as geom 
-                FROM stops
-                WHERE geometry IS NOT NULL;
+                    s.stop_id, 
+                    s.stop_name, 
+                    s.wheelchair_boarding, 
+                    ST_AsGeoJSON(s.geometry) as geom,
+                    array_agg(DISTINCT rs.route_id) as route_ids
+                FROM stops s
+                LEFT JOIN route_stops rs ON s.stop_id = rs.stop_id
+                WHERE s.geometry IS NOT NULL
+                GROUP BY s.stop_id, s.stop_name, s.wheelchair_boarding, s.geometry;
             """)
             result = conn.execute(query)
             
             features = []
             for row in result:
-                # Construct a standard GeoJSON Feature
                 feature = {
                     "type": "Feature",
                     "geometry": json.loads(row.geom),
                     "properties": {
                         "stop_id": row.stop_id,
                         "stop_name": row.stop_name,
-                        "wheelchair_boarding": row.wheelchair_boarding
+                        "wheelchair_boarding": row.wheelchair_boarding,
+                        # Handle cases where a stop might have no active routes
+                        "route_ids": row.route_ids if row.route_ids and row.route_ids[0] is not None else []
                     }
                 }
                 features.append(feature)
                 
-            return {
-                "type": "FeatureCollection",
-                "features": features
-            }
+            return {"type": "FeatureCollection", "features": features}
             
-    except OperationalError:
-        raise HTTPException(status_code=500, detail="Database connection failed.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 # ---------------------------------------------------------
 # REST ENDPOINT: Route Metadata
 # ---------------------------------------------------------

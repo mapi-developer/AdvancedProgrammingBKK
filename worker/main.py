@@ -84,7 +84,36 @@ def ingest_routes():
     df_routes.to_sql('routes', engine, if_exists='replace', index=False)
     print("Route ingestion complete!")
 
+def ingest_route_stops():
+    print("Reading trips and stop_times to map routes to specific stops...")
+    import zipfile
+    
+    with zipfile.ZipFile(ZIP_PATH, 'r') as z:
+        # Load trips (links route_id -> trip_id)
+        with z.open('trips.txt') as f:
+            df_trips = pd.read_csv(f, usecols=["route_id", "trip_id"])
+            
+        # Load stop_times (links trip_id -> stop_id)
+        with z.open('stop_times.txt') as f:
+            df_stop_times = pd.read_csv(f, usecols=["trip_id", "stop_id"])
+
+    print("Merging data to find unique route-stop pairs (This may take a moment)...")
+    # Merge on trip_id, then drop duplicates to get unique route_id <-> stop_id pairs
+    df_route_stops = df_trips.merge(df_stop_times, on="trip_id")[["route_id", "stop_id"]].drop_duplicates()
+
+    engine = get_db_engine(DB_URL)
+    print("Pushing route_stops mapping to PostgreSQL...")
+    df_route_stops.to_sql('route_stops', engine, if_exists='replace', index=False)
+    
+    # Create an index to make our API queries blazingly fast
+    with engine.connect() as conn:
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_route_stops_stop_id ON route_stops(stop_id);"))
+        conn.commit()
+        
+    print("Route-Stop mapping complete!")
+
 if __name__ == "__main__":
     time.sleep(5) 
     ingest_stops()
     ingest_routes()
+    ingest_route_stops()
