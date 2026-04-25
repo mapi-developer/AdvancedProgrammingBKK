@@ -70,6 +70,29 @@ def get_stops():
         raise HTTPException(status_code=500, detail=str(e))
 
 # ---------------------------------------------------------
+# REST ENDPOINT: Route Metadata
+# ---------------------------------------------------------
+@app.get("/api/v1/routes")
+def get_routes():
+    """
+    Returns a dictionary mapping route_ids to their human-readable name and type.
+    """
+    try:
+        with engine.connect() as conn:
+            query = text("SELECT route_id, route_short_name, route_type FROM routes;")
+            result = conn.execute(query)
+            
+            route_map = {}
+            for row in result:
+                route_map[row.route_id] = {
+                    "name": str(row.route_short_name),
+                    "type": row.route_type
+                }
+            return route_map
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ---------------------------------------------------------
 # WEBSOCKET ENDPOINT: Real-Time Kafka Stream (Phase 2)
 # ---------------------------------------------------------
 @app.websocket("/ws/vehicles")

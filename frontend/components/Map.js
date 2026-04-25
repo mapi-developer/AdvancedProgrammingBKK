@@ -18,12 +18,12 @@ const busIcon = new L.Icon({
   iconSize: [25, 25],
 });
 
-export default function Map({ stopsGeoJSON, liveVehicles }) {
+export default function Map({ stopsGeoJSON, liveVehicles, routeMap }) {
   // Center map on Budapest
   const position = [47.4979, 19.0402]; 
 
   return (
-    <MapContainer center={position} zoom={12} style={{ height: '100vh', width: '100%' }}>
+    <MapContainer center={position} zoom={12} style={{ height: '100vh', width: '100%', zIndex: 0 }}>
       {/* Free OpenStreetMap Base Layer */}
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -43,18 +43,27 @@ export default function Map({ stopsGeoJSON, liveVehicles }) {
       )}
 
       {/* Phase 2 Data: Render live streaming vehicles */}
-      {Object.values(liveVehicles).map((vehicle) => (
-        <Marker 
-          key={vehicle.vehicle_id} 
-          position={[vehicle.lat, vehicle.lon]} 
-          icon={busIcon}
-        >
-          <Popup>
-            <strong>Route: {vehicle.route_id}</strong><br/>
-            Vehicle ID: {vehicle.vehicle_id}
-          </Popup>
-        </Marker>
-      ))}
+      {/* Note: liveVehicles is now passed in as a pre-filtered array from page.js */}
+      {liveVehicles && liveVehicles.map((vehicle) => {
+        // Safely look up the human-readable name, fallback to raw ID if missing
+        const routeName = routeMap && routeMap[vehicle.route_id] 
+          ? routeMap[vehicle.route_id].name 
+          : vehicle.route_id;
+
+        return (
+          <Marker 
+            key={vehicle.vehicle_id} 
+            position={[vehicle.lat, vehicle.lon]} 
+            icon={busIcon}
+          >
+            <Popup>
+              <strong>Line: {routeName}</strong><br/>
+              Vehicle ID: {vehicle.vehicle_id}<br/>
+              Status: Live
+            </Popup>
+          </Marker>
+        );
+      })}
     </MapContainer>
   );
 }

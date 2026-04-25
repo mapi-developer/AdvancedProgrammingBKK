@@ -66,7 +66,25 @@ def ingest_stops():
     
     print("Ingestion complete! The static GTFS stops data is now in your database.")
 
+def ingest_routes():
+    print(f"Reading routes.txt from {ZIP_PATH}...")
+    
+    import zipfile
+    with zipfile.ZipFile(ZIP_PATH, 'r') as z:
+        with z.open('routes.txt') as f:
+            df_routes = pd.read_csv(
+                f,
+                sep=",",
+                # route_type: 0=Tram, 1=Metro, 3=Bus, 11=Trolleybus
+                usecols=["route_id", "route_short_name", "route_type"] 
+            )
+            
+    engine = get_db_engine(DB_URL)
+    print("Pushing route metadata to PostGIS...")
+    df_routes.to_sql('routes', engine, if_exists='replace', index=False)
+    print("Route ingestion complete!")
+
 if __name__ == "__main__":
-    # Small delay to ensure the database container is fully initialized on first boot
     time.sleep(5) 
     ingest_stops()
+    ingest_routes()
