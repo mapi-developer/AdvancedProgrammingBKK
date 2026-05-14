@@ -56,11 +56,13 @@ export default function HomePage() {
     const totalRoutes = Object.keys(data.routes).length;
     
     // Breakdown calculations
-    const getCategory = (type: number) => {
-      if (type === 0) return 'tram';
-      if (type === 1) return 'metro';
-      if (type === 109) return 'hev';
-      return 'bus';
+    const getCategory = (typeCode: any) => {
+      const code = Number(typeCode);
+      if (code === 0) return 'tram';
+      if (code === 1) return 'metro';
+      if (code === 109) return 'hev';
+      if ([3, 11, 800].includes(code)) return 'bus';
+      return 'other';
     };
 
     const categories = {

@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css';
 export const TransitMap = ({ stops, vehicles, routeMap, getCategory }: any) => {
   return (
     <MapContainer center={[47.4979, 19.0539]} zoom={13} zoomControl={false} className="h-full w-full">
-      <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+      <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
 
       {/* Render Stops from PostGIS */}
       {stops?.features?.map((f: any) => (

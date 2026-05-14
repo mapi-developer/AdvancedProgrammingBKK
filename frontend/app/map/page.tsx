@@ -35,21 +35,32 @@ export default function MapPage() {
     return () => ws.close();
   }, []);
 
-  const getTransportCategory = (typeCode: number) => {
-    if (typeCode === 0) return 'tram';
-    if (typeCode === 1) return 'metro';
-    if (typeCode === 109) return 'hev';
-    if ([3, 11, 800].includes(typeCode)) return 'bus';
+  const getTransportCategory = (typeCode: any) => {
+    const code = Number(typeCode);
+    if (code === 0) return 'tram';
+    if (code === 1) return 'metro';
+    if (code === 109) return 'hev';
+    if ([3, 11, 800].includes(code)) return 'bus';
     return 'other';
   };
 
   const isRouteVisible = (routeId: string) => {
-    const route = routeMap[routeId];
+    if (!routeId) return false;
+    
+    // Try finding the route with or without the BKK_ prefix
+    const cleanId = routeId.replace('BKK_', '');
+    const route = routeMap[routeId] || routeMap[`BKK_${cleanId}`] || routeMap[cleanId];
+    
     if (!route) return false;
+
     const category = getTransportCategory(route.type);
     if (!activeTypes.has(category)) return false;
+
+    // Ensure selected route pool also matches correctly
     if (selectedRoutes.length > 0) {
-      return selectedRoutes.some(sr => sr.id === routeId);
+      return selectedRoutes.some(sr => 
+        sr.id === routeId || sr.id === `BKK_${cleanId}` || sr.id === cleanId
+      );
     }
     return true;
   };

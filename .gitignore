@@ -2,3 +2,4 @@ __pycache__/
 .env
 .venv
 worker/data/budapest_gtfs.zip
+bkk_data
