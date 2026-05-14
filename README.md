@@ -1,5 +1,15 @@
 # Project Documentation: Budapest Real-Time Transit & Accessibility Analytics
 
+## How to run the project
+
+- If you want to run analysis part you need to create Anaconda python environment and install all packages from `analysis/requirements.txt`.
+
+    Then you can run notebook analysis scripts
+
+- If you want to run Interactive WebApp localy you need to build up `docker-compose.yml` file from root project directory it will launch whole backend service. After that from `frontend` directory you can launch app with `npm run dev` command.
+
+    Then you will have your web app running on `http://localhost:3000`
+
 ## 1. Project Overview
 This project is a full-stack data engineering and web application designed to analyze and visualize the public transportation network of Budapest (BKK). The system serves a dual purpose:
 1.  **Accessibility Analytics:** Extracting, processing, and analyzing static and dynamic transit data to calculate the wheelchair accessibility footprint across tram, bus, and metro routes.
